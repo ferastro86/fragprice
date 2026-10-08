@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 
 from . import db, export
-from .extract import extract_post, extract_titles
+from .extract import PROMPT_VERSION, extract_post, extract_titles
 from .normalize import Canonicalizer, clean_item
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -180,6 +180,10 @@ def main():
     cfg = load_config()
     con = db.connect()
     if not a.export_only:
+        if db.get_meta(con, "prompt_version", 1) != PROMPT_VERSION:
+            n = con.execute("UPDATE posts SET checks=0, text_hash=NULL WHERE checks>0 AND source!='mercari'").rowcount
+            db.set_meta(con, "prompt_version", PROMPT_VERSION)
+            print(f"reading rules changed (v{PROMPT_VERSION}): {n} posts queued to be re-read")
         canon = Canonicalizer(con)
         wanted = a.sources.split(",") if a.sources else [s for s in ("reddit", "mercari", "facebook") if cfg[s]["enabled"]]
         for s in wanted:
