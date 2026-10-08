@@ -101,9 +101,18 @@ def _flatten(children, out, depth=0):
                 _flatten(rep.get("data", {}).get("children"), out, depth + 1)
 
 
+_reddit_blocked = False
+
+
 def live(post_id):
-    """Current post text, flair, author and comments. Tries reddit.com, falls back to Arctic Shift."""
-    data = _get(f"https://www.reddit.com/comments/{post_id}.json", {"raw_json": 1, "limit": 100})
+    """Current post text, flair, author and comments. Tries reddit.com, falls back to Arctic Shift.
+    If reddit.com refuses us once, stop trying it for the rest of the run (no slow retries per post)."""
+    global _reddit_blocked
+    data = None if _reddit_blocked else _get(f"https://www.reddit.com/comments/{post_id}.json",
+                                             {"raw_json": 1, "limit": 100}, tries=2)
+    if data is None and not _reddit_blocked:
+        _reddit_blocked = True
+        print("  reddit.com not answering from this runner — using the Arctic Shift archive for the rest of the run")
     if isinstance(data, list) and data:
         p = data[0]["data"]["children"][0]["data"]
         comments = []

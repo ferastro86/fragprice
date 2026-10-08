@@ -44,6 +44,7 @@ jobs:
       - name: Scrape, extract with Claude, export
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PYTHONUNBUFFERED: "1"   # show progress live in the Actions log
         run: |
           ARGS=""
           if [ -n "${{ inputs.sources }}" ]; then ARGS="$ARGS --sources ${{ inputs.sources }}"; fi

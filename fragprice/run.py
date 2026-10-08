@@ -64,8 +64,11 @@ def run_reddit(con, cfg, canon, backfill_days=None, budget=None):
 
     due = db.due_posts(con, "reddit", cfg["check_ages_days"], limit=budget or cfg["max_claude_calls"])
     print(f"reddit: {len(due)} posts due for a Claude read")
-    done = 0
+    done, deadline = 0, time.time() + cfg.get("max_minutes", 40) * 60
     for row in due:
+        if time.time() > deadline:
+            print(f"reddit: time budget reached after {done} posts — the rest continue next run")
+            break
         cur = reddit.live(row["post_id"]) or {"title": row["title"], "text": row["text"], "flair": None,
                                              "author": None, "comments": []}
         if cur["text"] in ("[deleted]", "[removed]"):
