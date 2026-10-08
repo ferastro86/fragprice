@@ -120,6 +120,11 @@ def run_reddit(con, cfg, canon, backfill_days=None, budget=None):
                 done += 1
                 if done % 25 == 0:
                     print(f"  read {done}/{len(due)} posts")
+            # a post already older than the last check age has had all the time it needs for SOLD edits:
+            # one read is enough, so don't schedule the 21-day re-read (halves backfill cost)
+            last_age = max(cfg["check_ages_days"])
+            con.execute("UPDATE posts SET checks=? WHERE source='reddit' AND post_id=? AND checks>0 AND created_utc<=?",
+                        (len(cfg["check_ages_days"]), row["post_id"], time.time() - last_age * 86400))
             con.commit()
     print(f"reddit: read {done} posts" + (f"; time budget reached, {late} wait for the next run" if late else ""))
 
