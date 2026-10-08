@@ -121,7 +121,7 @@ TOOL = {
 }
 
 
-def _params(user_text, max_tokens=4000):
+def _params(user_text, max_tokens=16000):  # room for 100+ item lists; only tokens used are billed
     return dict(
         model=MODEL,
         max_tokens=max_tokens,
@@ -145,7 +145,7 @@ def _items(msg):
     return []
 
 
-def _call(user_text, max_tokens=4000, retries=4):
+def _call(user_text, max_tokens=16000, retries=4):
     for attempt in range(retries):
         try:
             return _items(client().messages.create(**_params(user_text, max_tokens)))

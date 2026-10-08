@@ -300,6 +300,11 @@ def main():
             n = con.execute("UPDATE posts SET checks=0, text_hash=NULL WHERE checks>0 AND source!='mercari'").rowcount
             db.set_meta(con, "prompt_version", PROMPT_VERSION)
             print(f"reading rules changed (v{PROMPT_VERSION}): {n} posts queued to be re-read")
+        if not db.get_meta(con, "long_reread_v1"):
+            # answers used to be capped at ~4k tokens, cutting off long multi-house lists: re-read long posts once
+            n = con.execute("UPDATE posts SET checks=0, text_hash=NULL WHERE checks>0 AND length(text)>3000").rowcount
+            db.set_meta(con, "long_reread_v1", True)
+            print(f"re-reading {n} long posts whose item lists may have been cut off")
         canon = Canonicalizer(con)
         wanted = a.sources.split(",") if a.sources else [s for s in ("reddit", "mercari", "facebook") if cfg[s]["enabled"]]
         for s in wanted:
