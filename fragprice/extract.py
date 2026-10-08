@@ -8,7 +8,7 @@ import anthropic
 
 MODEL = os.environ.get("FRAGPRICE_MODEL", "claude-haiku-5-5")
 # Bump when the SYSTEM rules change: posts read under an older version get re-read on the next run.
-PROMPT_VERSION = 2
+PROMPT_VERSION = 3
 _client = None
 
 
@@ -49,10 +49,13 @@ SOLD STATUS (be strict — this drives valuations)
     1. the item's line is ~~struck through~~ in the post text;
     2. the word "SOLD"/"sold" next to the item in the post text (e.g. "Layton 125ml $180 - SOLD");
     3. the post's flair or title says SOLD (e.g. flair "SOLD", "[SOLD]") — that covers every item in the post;
-    4. a comment by the SELLER saying it sold (e.g. "Layton sold", "all sold", "everything is gone").
+    4. a comment by the SELLER saying it sold (e.g. "Layton sold", "all sold", "everything is gone");
+    5. a comment by anyone else that clearly says THIS item is gone (e.g. "can't believe Night Drive is gone",
+       "congrats on selling the Layton", "missed out on the Aventus");
+    6. a "PerfumeBot Sale u/X" / "PerfumeBot Buy u/X" comment, but ONLY on a post selling a single bottle.
+       On a multi-bottle post PerfumeBot alone does not say which item sold — it needs one of signals 1–5.
   Mercari items are always sold.
-- PerfumeBot comments ("PerfumeBot Sale u/X", "PerfumeBot Buy u/X") are NOT a sold signal — ignore them entirely.
-  Buyer comments like "I'll take it" / "chat sent" are not sold signals either.
+  Not sold signals: "I'll take it", "chat sent", "interested", "PM'd" (interest is not a sale).
 - pending: "pending", "on hold", "PPD".
 - available: explicitly still available, or no sold signal on a post where other items ARE marked sold.
 - unknown: no signal either way.
