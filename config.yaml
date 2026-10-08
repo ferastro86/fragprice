@@ -8,9 +8,12 @@ reddit:
   subreddits: [fragranceswap]
   first_run_days: 30          # history pulled on the very first run (use --backfill-days for more)
   check_ages_days: [4, 21]    # read each post at 4 days old, re-read at 21 days (catches late SOLD edits)
-  max_claude_calls: 1500      # cap per run (~$0.60)
-  workers: 6                  # posts read in parallel
-  max_minutes: 40             # stop reading posts after this long; the rest wait for the next run
+  batch: true                 # Message Batches API: same answers, half price, no speed limit
+  max_claude_calls: 30000     # cap on posts per run (batch handles a 180-day backfill in one go)
+  workers: 8                  # posts fetched in parallel
+  max_minutes: 150            # collecting + fetching posts, from run start; leftovers continue next run
+  batch_wait_minutes: 90      # then wait this long for batch answers; if not back, next run collects them
+  skip_old_without_sale_hint: true   # posts past the last check age with no sold/gone/~~/PerfumeBot wording skip Claude
   skip_decant_posts: true     # don't send decant/split/sample-only posts to Claude (title check)
   exclude_conditions: [decant, sample]   # drop these items even when they appear on bottle posts
   # WTB / WTT / ISO posts are always skipped before Claude reads them

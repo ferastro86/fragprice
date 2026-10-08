@@ -121,21 +121,28 @@ TOOL = {
 }
 
 
+def _params(user_text, max_tokens=4000):
+    return dict(
+        model=MODEL,
+        max_tokens=max_tokens,
+        system=[{"type": "text", "text": SYSTEM, "cache_control": {"type": "ephemeral"}}],
+        tools=[TOOL],
+        tool_choice={"type": "tool", "name": "record_listings"},
+        messages=[{"role": "user", "content": user_text}],
+    )
+
+
+def _items(msg):
+    for block in msg.content:
+        if block.type == "tool_use":
+            return block.input.get("items", []) or []
+    return []
+
+
 def _call(user_text, max_tokens=4000, retries=4):
     for attempt in range(retries):
         try:
-            msg = client().messages.create(
-                model=MODEL,
-                max_tokens=max_tokens,
-                system=[{"type": "text", "text": SYSTEM, "cache_control": {"type": "ephemeral"}}],
-                tools=[TOOL],
-                tool_choice={"type": "tool", "name": "record_listings"},
-                messages=[{"role": "user", "content": user_text}],
-            )
-            for block in msg.content:
-                if block.type == "tool_use":
-                    return block.input.get("items", []) or []
-            return []
+            return _items(client().messages.create(**_params(user_text, max_tokens)))
         except (anthropic.RateLimitError, anthropic.APIStatusError, anthropic.APIConnectionError) as e:
             status = getattr(e, "status_code", None)
             if status and 400 <= status < 500 and status != 429:
@@ -144,18 +151,45 @@ def _call(user_text, max_tokens=4000, retries=4):
     raise RuntimeError("Claude API failed after retries")
 
 
-def extract_post(source, title, body, comments=None, flair=None, seller=None):
-    """One marketplace post (Reddit / Facebook) -> list of item dicts."""
+def post_text(source, title, body, comments=None, flair=None, seller=None):
     parts = [f"SOURCE: {source}"]
     if seller:
-        parts.append(f"SELLER (post author): {seller}  <- only the seller's own comments can mark items sold")
+        parts.append(f"SELLER (post author): {seller}")
     if flair:
         parts.append(f"FLAIR: {flair}")
     parts.append(f"TITLE: {title or ''}")
     parts.append(f"BODY:\n{(body or '')[:12000]}")
     if comments:
         parts.append("COMMENTS (author: text):\n" + "\n".join(c[:400] for c in comments[:60]))
-    return _call("\n\n".join(parts))
+    return "\n\n".join(parts)
+
+
+def extract_post(source, title, body, comments=None, flair=None, seller=None):
+    """One marketplace post (Reddit / Facebook) -> list of item dicts (immediate, full price)."""
+    return _call(post_text(source, title, body, comments, flair, seller))
+
+
+# ---------- Message Batches API: same model and instructions, half price, answers within minutes–hours ----------
+
+def submit_batch(texts):
+    """texts: {custom_id: user_text}. Returns the batch id."""
+    reqs = [{"custom_id": cid, "params": _params(t)} for cid, t in texts.items()]
+    return client().messages.batches.create(requests=reqs).id
+
+
+def batch_status(batch_id):
+    return client().messages.batches.retrieve(batch_id).processing_status  # "in_progress" | "canceling" | "ended"
+
+
+def batch_results(batch_id):
+    """{custom_id: list of items} for successes, {custom_id: Exception} for failures."""
+    out = {}
+    for entry in client().messages.batches.results(batch_id):
+        if entry.result.type == "succeeded":
+            out[entry.custom_id] = _items(entry.result.message)
+        else:
+            out[entry.custom_id] = RuntimeError(f"batch item {entry.result.type}")
+    return out
 
 
 def extract_titles(rows):

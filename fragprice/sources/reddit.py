@@ -12,6 +12,12 @@ TAG = re.compile(r"\[\s*(wts|wtb|wtt|fs|ft|iso)\s*\]", re.I)
 TYPE = re.compile(r"\(([^)]*\b(?:bottles?|decants?|samples?|splits?)\b[^)]*)\)", re.I)
 DECANT = re.compile(r"\b(decants?|splits?|samples?|vials?)\b", re.I)
 BOTTLE = re.compile(r"\b(bottles?|partials?|tester)\b", re.I)
+# Any wording that could mean an item sold. Deliberately wide: a false hit only costs one Claude read,
+# a miss would lose a sale. Used to skip old posts with no hint of a sale, and to pick comments worth sending.
+SALE_HINT = re.compile(
+    r"~~|\bsold\b|\bgone\b|\btaken\b|spoken for|no longer|perfume ?bot|fragrance ?bot|\bsale\b|"
+    r"congrat|missed|bye ?bye|\bgrab|\bclaimed\b|off the market|✅|✔|☑",
+    re.I)
 SIZE = re.compile(r"(\d+(?:\.\d+)?)\s?(ml|oz)\b", re.I)
 
 
@@ -133,3 +139,19 @@ def live(post_id):
         "title": p.get("title"), "text": p.get("selftext"), "flair": p.get("link_flair_text"),
         "author": p.get("author"), "comments": comments,
     }
+
+
+def has_sale_hint(*texts):
+    return any(t and SALE_HINT.search(t) for t in texts)
+
+
+def relevant_comments(comments, seller):
+    """Keep every comment by the seller, plus anyone's comment with sale wording. Others ('chat sent',
+    'still available?') can never mark an item sold, so they're not worth paying for."""
+    seller = (seller or "").lower()
+    keep = []
+    for c in comments or []:
+        who, _, body = c.partition(": ")
+        if (seller and who.lower() == seller) or SALE_HINT.search(body):
+            keep.append(c)
+    return keep

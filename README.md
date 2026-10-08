@@ -42,8 +42,11 @@ Asking prices of unsold bottles are shown separately.
 
 ## Costs (rough)
 
-- **Claude Haiku**: ~1–2k tokens per Reddit/Facebook post, Mercari titles batched 25 per call. r/fragranceswap
-  is a few hundred posts/week → typically a few dollars a month. The one-time 365-day backfill costs more.
+- **Claude Haiku via the Message Batches API** (half price, same answers): roughly $0.0002 per post read.
+  Only the seller's comments and comments with sale wording are sent. Posts older than the last check age that
+  contain no sale wording at all (sold, gone, taken, ~~strikethrough~~, PerfumeBot, ✅…) skip Claude entirely.
+  Rough totals: ~$1–2/month ongoing, ~$1.50–2.50 for a one-time 180-day backfill.
+- Batch answers usually arrive within minutes; if a run ends first, the next run collects them before doing anything else.
 - **Scraping**: free — Reddit via Arctic Shift, Mercari via your own Chromium scraper on the Actions runner.
 - Change the model with the `FRAGPRICE_MODEL` env var (default `claude-haiku-5-5`).
 
