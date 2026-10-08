@@ -135,7 +135,13 @@ def _params(user_text, max_tokens=4000):
 def _items(msg):
     for block in msg.content:
         if block.type == "tool_use":
-            return block.input.get("items", []) or []
+            items = block.input.get("items", []) or []
+            if isinstance(items, str):  # occasionally the list comes back JSON-encoded as a string
+                try:
+                    items = json.loads(items)
+                except ValueError:
+                    items = []
+            return items if isinstance(items, list) else []
     return []
 
 

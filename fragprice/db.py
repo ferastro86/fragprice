@@ -105,7 +105,7 @@ def due_posts(con, source, check_ages_days, limit=500):
         cutoff = now - age * 86400
         rows = con.execute(
             "SELECT * FROM posts WHERE source=? AND checks=? AND created_utc<=? "
-            "ORDER BY created_utc LIMIT ?",
+            "ORDER BY created_utc DESC LIMIT ?",  # newest first: recent prices matter most
             (source, i, cutoff, limit),
         ).fetchall()
         out.extend(rows)
