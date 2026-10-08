@@ -63,35 +63,50 @@ def run_reddit(con, cfg, canon, backfill_days=None, budget=None):
         print(f"reddit r/{sub}: discovered {len(posts)} posts, {n} candidates, skipped {skipped}")
 
     due = db.due_posts(con, "reddit", cfg["check_ages_days"], limit=budget or cfg["max_claude_calls"])
-    print(f"reddit: {len(due)} posts due for a Claude read")
-    done, deadline = 0, time.time() + cfg.get("max_minutes", 40) * 60
-    for row in due:
+    print(f"reddit: {len(due)} posts due for a Claude read ({cfg.get('workers', 6)} at a time)")
+    deadline = time.time() + cfg.get("max_minutes", 40) * 60
+    excl = set(cfg.get("exclude_conditions") or [])
+
+    def work(row):
+        """Fetch + Claude read in a worker thread. Returns (row, hash, items|None, error|None)."""
         if time.time() > deadline:
-            print(f"reddit: time budget reached after {done} posts — the rest continue next run")
-            break
+            return row, None, None, "deadline"
         cur = reddit.live(row["post_id"]) or {"title": row["title"], "text": row["text"], "flair": None,
                                              "author": None, "comments": []}
-        if cur["text"] in ("[deleted]", "[removed]"):
+        if cur["text"] in ("[deleted]", "[removed]", None, ""):
             cur["text"] = row["text"]  # keep archived copy if seller deleted after selling
         blob = f"{cur['title']}\n{cur['text']}\n{cur.get('flair')}\n" + "\n".join(cur["comments"])
         h = db.text_hash(blob)
-        post = dict(row)
         if row["checks"] > 0 and h == row["text_hash"]:
-            db.mark_checked(con, "reddit", row["post_id"], h)  # unchanged since last read: skip Claude
-            continue
+            return row, h, None, None  # unchanged since last read: skip Claude
         try:
             items = extract_post("reddit r/fragranceswap", cur["title"], cur["text"], cur["comments"],
                                  cur.get("flair"), seller=f"u/{cur['author']}" if cur.get("author") else None)
-            k = store_items(con, canon, "reddit", post, items,
-                            exclude_conditions=set(cfg.get("exclude_conditions") or []))
-            db.mark_checked(con, "reddit", row["post_id"], h)
-            done += 1
-            print(f"  [{done}] {row['post_id']}: {k} items")
+            return row, h, items, None
         except Exception as e:
-            con.execute("UPDATE posts SET error=? WHERE source='reddit' AND post_id=?", (str(e)[:300], row["post_id"]))
-            print(f"  {row['post_id']} failed: {e}")
-        con.commit()
-        time.sleep(1.2)  # be gentle with reddit.com
+            return row, h, None, str(e)[:300]
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    done = late = 0
+    with ThreadPoolExecutor(max_workers=cfg.get("workers", 6)) as pool:
+        for fut in as_completed([pool.submit(work, r) for r in due]):
+            row, h, items, err = fut.result()   # all DB writes happen here, on the main thread
+            if err == "deadline":
+                late += 1
+                continue
+            if err:
+                con.execute("UPDATE posts SET error=? WHERE source='reddit' AND post_id=?", (err, row["post_id"]))
+                print(f"  {row['post_id']} failed: {err}")
+            elif items is None:
+                db.mark_checked(con, "reddit", row["post_id"], h)
+            else:
+                k = store_items(con, canon, "reddit", dict(row), items, exclude_conditions=excl)
+                db.mark_checked(con, "reddit", row["post_id"], h)
+                done += 1
+                if done % 25 == 0:
+                    print(f"  read {done}/{len(due)} posts")
+            con.commit()
+    print(f"reddit: read {done} posts" + (f"; time budget reached, {late} wait for the next run" if late else ""))
 
 
 def run_facebook(con, cfg, canon):

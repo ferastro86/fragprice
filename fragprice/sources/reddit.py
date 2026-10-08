@@ -42,6 +42,8 @@ def discover(subreddit, after_ts, before_ts=None):
         for p in new:
             seen.add(p["id"])
             out.append(p)
+        if len(out) % 1000 < len(new):
+            print(f"  collected {len(out)} posts so far")
         if len(batch) < 100 or not new:
             break
         last = int(batch[-1]["created_utc"])

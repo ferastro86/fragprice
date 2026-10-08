@@ -45,6 +45,10 @@ PRICE
 SOLD STATUS (be strict — this drives valuations)
 - sold: strong evidence THIS item sold — ~~strikethrough~~ of the item, "SOLD"/"sold" next to it, "[sold]" in title/flair
   covering everything, seller comment like "sold to u/x" or "all sold", Mercari items (always sold).
+- PerfumeBot: on r/fragranceswap, "PerfumeBot Sale u/X" / "PerfumeBot Buy u/X" comments confirm that SOME transaction
+  happened, not which item. On a single-item post it means that item sold. On a multi-item post it is NOT enough by
+  itself: an item is sold only if it is also struck through, marked SOLD, or named in a comment ("Layton sold to u/x");
+  otherwise mark the items unknown.
 - pending: "pending", "on hold", "PPD".
 - available: explicitly still available, or no sold signal on a post where other items ARE marked sold.
 - unknown: no signal either way.
