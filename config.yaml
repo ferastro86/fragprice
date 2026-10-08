@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------
-# fragprice config. Secrets (ANTHROPIC_API_KEY, APIFY_TOKEN) go in
+# fragprice config. Secret ANTHROPIC_API_KEY goes in
 # GitHub repo Settings -> Secrets and variables -> Actions.
 # ---------------------------------------------------------------
 
@@ -12,18 +12,9 @@ reddit:
 
 mercari:
   enabled: true
-  # Apify actor for Mercari US sold listings (~$0.004 per item incl. sold dates).
-  # {keyword}, {max_items}, {sold_within_days}, {search_url} are filled in.
-  actor: "devilscrapes/mercari-sold-listings"
-  actor_input:
-    keyword: "{keyword}"
-    soldOnly: true
-    soldWithinDays: "{sold_within_days}"
-    includeDetails: true
-    maxResults: "{max_items}"
-  sold_within_days: 3         # daily runs only fetch the last few days; backfill uses --backfill-days
-  price_divisor: 1            # set to 100 if you swap to an actor that returns cents
-  max_items_per_keyword: 150
+  # Own scraper (Playwright Chromium). Searches mercari.com with the sold-only filter.
+  headless: false             # false = real browser window under xvfb on Actions (harder to detect)
+  max_items_per_keyword: 150   # x5 on backfill runs
   titles_per_call: 25         # Mercari titles batched per Claude call (cheap)
   keywords:
     - parfums de marly
@@ -46,13 +37,7 @@ mercari:
     - montale
 
 facebook:
-  enabled: true
-  actor: "apify/facebook-groups-scraper"
-  actor_input:
-    startUrls: [{url: "{group_url}"}]
-    resultsLimit: "{max_items}"
-    viewOption: "CHRONOLOGICAL"
-    onlyPostsNewerThan: "{newer_than}"
+  enabled: false              # scraper not chosen yet (see README)
   lookback: "12 days"          # each run rescrapes this window so SOLD edits/comments get picked up
   max_posts_per_group: 300
   check_ages_days: [4, 10]
@@ -60,5 +45,6 @@ facebook:
   groups: []                   # paste group URLs, e.g. - https://www.facebook.com/groups/123456789
 
 valuation:
+  default_off: []             # platforms unticked on the search page by default, e.g. [mercari]
   window_days: 365            # sales older than this are ignored
   min_confidence: 0.6         # drop items Claude wasn't sure about

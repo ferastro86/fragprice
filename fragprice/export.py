@@ -14,6 +14,7 @@ DOCS = Path(__file__).resolve().parent.parent / "docs"
 NEW = {"new_sealed", "new_unsealed"}
 USED = {"used", "partial", "tester", "unknown"}
 SMALL = {"decant", "sample"}
+SOURCES = ["reddit", "facebook", "mercari"]
 
 
 def _cond_class(c):
@@ -80,6 +81,11 @@ def build(con, vcfg):
             s["median_90d"] = round(statistics.median(r90), 2) if r90 else None
             s["avg_fill"] = round(statistics.mean([r["fill_pct"] for r in rs if r["fill_pct"] is not None]), 0) \
                 if any(r["fill_pct"] is not None for r in rs) else None
+            s["by_source"] = {}
+            for src in SOURCES:
+                st = _stats([r["price"] for r in rs if r["source"] == src])
+                if st:
+                    s["by_source"][src] = {"median": st["median"], "n": st["n"]}
             sizes.append({"size_ml": size, "cond": cc, **s})
 
         def ppm(rs):
@@ -97,13 +103,18 @@ def build(con, vcfg):
             "ppm_bottle": ppm([r for r in sold if _cond_class(r["condition"]) != "decant"]),
             "ppm_decant": ppm([r for r in sold if _cond_class(r["condition"]) == "decant"]),
             "sources": sorted({r["source"] for r in sold}),
+            "n_by_source": {src: sum(1 for r in sold if r["source"] == src) for src in SOURCES},
+            # compact rows so the search page can recompute values with platforms toggled off:
+            # [days since epoch, price, size_ml, fill_pct, cond class, source index]
+            "s": [[int(r["date_utc"] // 86400), r["price"], r["size_ml"], r["fill_pct"],
+                   _cond_class(r["condition"])[0], SOURCES.index(r["source"])] for r in sold],
             "sizes": sizes,
             "ask_median": _stats([r["price"] for r in asks])["median"] if asks and _stats([r["price"] for r in asks]) else None,
             "n_asks": len(asks),
             "recent": [{
                 "date": _date(r["date_utc"]), "price": r["price"], "size_ml": r["size_ml"], "fill": r["fill_pct"],
                 "cond": r["condition"], "source": r["source"], "url": r["url"], "conc": r["concentration"],
-            } for r in sold[:15]],
+            } for r in sold[:40]],
         })
     out.sort(key=lambda x: (-x["n_sold"], x["brand"] or "", x["name"] or ""))
 
@@ -113,6 +124,9 @@ def build(con, vcfg):
         "n_fragrances": len(out),
         "n_sales": sum(x["n_sold"] for x in out),
         "window_days": vcfg["window_days"],
+        "sources": SOURCES,
+        "default_off": vcfg.get("default_off") or [],
+        "n_by_source": {src: sum(x["n_by_source"][src] for x in out) for src in SOURCES},
         "fragrances": out,
     }
     (DOCS / "data.json").write_text(json.dumps(summary, separators=(",", ":")))
@@ -144,11 +158,17 @@ def _excel(out, rows, summary):
     data = []
     for f in out:
         for s in f["sizes"]:
+            per = []
+            for src in SOURCES:
+                b = s["by_source"].get(src) or {}
+                per += [b.get("median"), b.get("n") or 0]
             data.append([f["brand"], f["name"], s["size_ml"], s["cond"], s["avg_fill"], s["median"],
-                         s["median_90d"], s["low"], s["high"], s["n"], f["ppm_bottle"], f["last_sold"]])
-    sheet(ws, ["Brand", "Fragrance", "Size (ml)", "Condition", "Avg fill %", "Median sold", "Median 90d",
-               "Low", "High", "# Sales", "$/ml (bottles)", "Last sold"],
-          data, [22, 30, 10, 11, 10, 13, 12, 10, 10, 9, 13, 12], money_cols=(6, 7, 8, 9, 11))
+                         s["median_90d"], s["low"], s["high"], s["n"], *per, f["ppm_bottle"], f["last_sold"]])
+    sheet(ws, ["Brand", "Fragrance", "Size (ml)", "Condition", "Avg fill %", "Median (all)", "Median 90d",
+               "Low", "High", "# Sales", "Median Reddit", "# Reddit", "Median Facebook", "# Facebook",
+               "Median Mercari", "# Mercari", "$/ml (bottles)", "Last sold"],
+          data, [22, 30, 10, 11, 10, 13, 12, 10, 10, 9, 14, 9, 15, 11, 14, 10, 13, 12],
+          money_cols=(6, 7, 8, 9, 11, 13, 15, 17))
 
     ws = wb.create_sheet("Sales")
     sheet(ws, ["Date", "Source", "Brand", "Fragrance", "Conc.", "Size (ml)", "Fill %", "Condition", "Price",
@@ -163,6 +183,7 @@ def _excel(out, rows, summary):
         ["Fragrance values"], [f"Updated {summary['updated']}"],
         [f"{summary['n_fragrances']} fragrances from {summary['n_sales']} sold listings in the last {summary['window_days']} days"],
         ["Values = median SOLD price, outliers removed (1.5x IQR when 5+ sales). Sources: Reddit, Facebook groups, Mercari."],
+        ["Per-platform medians are in the Values sheet; filter the Sales sheet's Source column to exclude a platform."],
         ["Condition: new = sealed/unsealed new; used = used/partial/tester; decant = decants & samples."],
     ]:
         ws.append(line)

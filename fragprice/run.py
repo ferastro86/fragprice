@@ -87,12 +87,12 @@ def run_reddit(con, cfg, canon, backfill_days=None, budget=None):
 
 
 def run_facebook(con, cfg, canon):
-    from .sources import apify_sources
+    from .sources.facebook import facebook
 
     if not cfg.get("groups"):
         print("facebook: no groups configured, skipping")
         return
-    for p in apify_sources.facebook(cfg):
+    for p in facebook(cfg):
         db.upsert_post(con, "facebook", p["post_id"], p["url"], p["title"], p["text"], p["created_utc"])
     con.commit()
     due = db.due_posts(con, "facebook", cfg["check_ages_days"], limit=cfg["max_claude_calls"])
@@ -113,9 +113,9 @@ def run_facebook(con, cfg, canon):
 
 
 def run_mercari(con, cfg, canon, backfill_days=None):
-    from .sources import apify_sources
+    from .sources.mercari import mercari
 
-    rows = apify_sources.mercari(cfg, backfill_days)
+    rows = mercari(cfg, backfill_days)
     new = []
     for r in rows:
         exists = con.execute("SELECT 1 FROM posts WHERE source='mercari' AND post_id=?", (r["post_id"],)).fetchone()

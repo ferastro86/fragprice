@@ -35,15 +35,17 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      - name: Install Chromium for the Mercari scraper
+        run: python -m playwright install --with-deps chromium && sudo apt-get install -y xvfb
+
       - name: Scrape, extract with Claude, export
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
         run: |
           ARGS=""
           if [ -n "${{ inputs.sources }}" ]; then ARGS="$ARGS --sources ${{ inputs.sources }}"; fi
           if [ -n "${{ inputs.backfill_days }}" ]; then ARGS="$ARGS --backfill-days ${{ inputs.backfill_days }}"; fi
-          python -m fragprice.run $ARGS
+          xvfb-run -a python -m fragprice.run $ARGS   # virtual display so Chromium can run non-headless
 
       - name: Commit database and exports
         if: always()
