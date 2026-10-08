@@ -26,6 +26,7 @@ header h1{font:650 30px/1.1 Fraunces,Georgia,serif;margin:6px 0 4px;letter-spaci
 .search input{width:100%;font:500 17px Inter,sans-serif;padding:13px 16px;border-radius:14px;border:1px solid var(--line);
   background:var(--card);color:var(--ink);outline:none}
 .search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.plats[hidden]{display:none}
 .plats{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center}
 .plats .lbl{font-size:12px;color:var(--muted);margin-right:2px}
 .plat{border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:999px;padding:6px 12px;
@@ -183,6 +184,7 @@ function updateEst(c) {
 
 function buildToggles(counts) {
   const box = $("#plats");
+  if (ACTIVE.length < 2) { box.hidden = true; return; }  // nothing to toggle with one platform
   for (const src of ACTIVE) {
     const b = document.createElement("button");
     b.className = "plat" + (ON[src] ? " on" : "");

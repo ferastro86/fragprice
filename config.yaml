@@ -9,9 +9,12 @@ reddit:
   first_run_days: 30          # history pulled on the very first run (use --backfill-days for more)
   check_ages_days: [4, 21]    # read each post at 4 days old, re-read at 21 days (catches late SOLD edits)
   max_claude_calls: 600       # cap per run
+  skip_decant_posts: true     # don't send decant/split/sample-only posts to Claude (title check)
+  exclude_conditions: [decant, sample]   # drop these items even when they appear on bottle posts
+  # WTB / WTT / ISO posts are always skipped before Claude reads them
 
 mercari:
-  enabled: true
+  enabled: false              # off: Mercari blocks automated browsers (see README). Scraper kept for later.
   # Own scraper (Playwright Chromium). Searches mercari.com with the sold-only filter.
   headless: false             # false = real browser window under xvfb on Actions (harder to detect)
   max_items_per_keyword: 150   # x5 on backfill runs

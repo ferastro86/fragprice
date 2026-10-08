@@ -7,7 +7,11 @@ import requests
 
 ARCTIC = "https://arctic-shift.photon-reddit.com/api"
 UA = {"User-Agent": "fragprice/1.0 (fragrance price research)"}
-WTB = re.compile(r"\[\s*wtb\s*\]|\bwtb\b|\[w\]\s*[^\[]*\[h\]\s*(paypal|\$|cash)", re.I)
+WTB_WTT = re.compile(r"\b(wtb|wtt|iso|want to (buy|trade)|looking for)\b", re.I)
+MONEY = re.compile(r"paypal|\bpp\b|\$|cash|venmo|zelle|cash ?app|\busd\b|\bg&s\b|\bf&f\b", re.I)
+DECANT = re.compile(r"\b(decants?|splits?|samples?|vials?|atomi[sz]ers?)\b", re.I)
+BOTTLE = re.compile(r"\b(bottles?|full|partials?|\d{2,3}\s?ml|\d(\.\d)?\s?oz|tester|sealed|nib|bnib)\b", re.I)
+SECTION = re.compile(r"\[\s*(h|w)\s*\]\s*(.*?)(?=\[\s*[hw]\s*\]|$)", re.I)
 
 
 def _get(url, params=None, tries=4):
@@ -45,12 +49,34 @@ def discover(subreddit, after_ts, before_ts=None):
     return out
 
 
-def is_candidate(post):
-    """Cheap pre-filter so we don't pay Claude to read want-to-buy posts."""
+def skip_reason(post, skip_decant_posts=True):
+    """Cheap title pre-filter so Claude never reads posts we don't want. Returns a reason, or None to keep.
+
+    r/fragranceswap titles look like "[US-TX] [H] Layton, Aventus [W] PayPal".
+      - WTB: money is what they HAVE, or the title says WTB/ISO/looking for
+      - WTT: what they WANT has no money in it (trade-only), or the title says WTT
+      - decant posts: title is about decants/splits/samples and mentions no bottles
+    """
     title = post.get("title") or ""
-    if WTB.search(title):
-        return False
-    return not post.get("is_video")
+    if post.get("is_video"):
+        return "video"
+    if WTB_WTT.search(title):
+        return "wtb/wtt"
+    sec = {}
+    for k, v in SECTION.findall(title):
+        sec.setdefault(k.lower(), v)
+    have, want = sec.get("h"), sec.get("w")
+    if have is not None and MONEY.search(have) and not (want and MONEY.search(want)):
+        return "wtb"
+    if want is not None and not MONEY.search(want):
+        return "wtt"
+    if skip_decant_posts and DECANT.search(title) and not BOTTLE.search(title):
+        return "decants"
+    return None
+
+
+def is_candidate(post, skip_decant_posts=True):
+    return skip_reason(post, skip_decant_posts) is None
 
 
 def _flatten(children, out, depth=0):

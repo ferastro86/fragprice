@@ -35,8 +35,11 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Install Chromium for the Mercari scraper
-        run: python -m playwright install --with-deps chromium && sudo apt-get install -y xvfb
+      - name: Install Chromium (only when Mercari is enabled)
+        run: |
+          if python -c "import yaml,sys; sys.exit(0 if yaml.safe_load(open('config.yaml'))['mercari']['enabled'] else 1)"; then
+            python -m playwright install --with-deps chromium && sudo apt-get install -y xvfb
+          fi
 
       - name: Scrape, extract with Claude, export
         env:
@@ -45,7 +48,8 @@ jobs:
           ARGS=""
           if [ -n "${{ inputs.sources }}" ]; then ARGS="$ARGS --sources ${{ inputs.sources }}"; fi
           if [ -n "${{ inputs.backfill_days }}" ]; then ARGS="$ARGS --backfill-days ${{ inputs.backfill_days }}"; fi
-          xvfb-run -a python -m fragprice.run $ARGS   # virtual display so Chromium can run non-headless
+          if command -v xvfb-run >/dev/null; then RUN="xvfb-run -a"; else RUN=""; fi   # virtual display for Mercari's browser
+          $RUN python -m fragprice.run $ARGS
 
       - name: Commit database and exports
         if: always()

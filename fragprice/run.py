@@ -22,10 +22,12 @@ def load_config():
     return yaml.safe_load((ROOT / "config.yaml").read_text())
 
 
-def store_items(con, canon, source, post, items, default_status=None):
+def store_items(con, canon, source, post, items, default_status=None, exclude_conditions=()):
     keep = []
     for it in items:
         it = clean_item(it)
+        if it.get("condition") in exclude_conditions:
+            continue  # e.g. decants/samples on a bottle post
         if default_status:
             it["status"] = default_status
         _, _, key = canon.canon(it.get("brand"), it.get("name"))
@@ -47,16 +49,18 @@ def run_reddit(con, cfg, canon, backfill_days=None, budget=None):
         now = int(time.time())
         start = now - backfill_days * 86400 if backfill_days else db.get_meta(con, mk, now - cfg["first_run_days"] * 86400)
         posts = reddit.discover(sub, start, now)
-        n = 0
+        n, skipped = 0, {}
         for p in posts:
-            if not reddit.is_candidate(p):
+            why = reddit.skip_reason(p, cfg.get("skip_decant_posts", True))
+            if why:
+                skipped[why] = skipped.get(why, 0) + 1
                 continue
             db.upsert_post(con, "reddit", p["id"], f"https://www.reddit.com{p.get('permalink', '')}",
                            p.get("title"), p.get("selftext"), p.get("created_utc"))
             n += 1
         con.commit()
         db.set_meta(con, mk, max(now - 3600, db.get_meta(con, mk, 0)))
-        print(f"reddit r/{sub}: discovered {len(posts)} posts, {n} candidates")
+        print(f"reddit r/{sub}: discovered {len(posts)} posts, {n} candidates, skipped {skipped}")
 
     due = db.due_posts(con, "reddit", cfg["check_ages_days"], limit=budget or cfg["max_claude_calls"])
     print(f"reddit: {len(due)} posts due for a Claude read")
@@ -75,7 +79,8 @@ def run_reddit(con, cfg, canon, backfill_days=None, budget=None):
         try:
             items = extract_post("reddit r/fragranceswap", cur["title"], cur["text"], cur["comments"],
                                  cur.get("flair"), seller=f"u/{cur['author']}" if cur.get("author") else None)
-            k = store_items(con, canon, "reddit", post, items)
+            k = store_items(con, canon, "reddit", post, items,
+                            exclude_conditions=set(cfg.get("exclude_conditions") or []))
             db.mark_checked(con, "reddit", row["post_id"], h)
             done += 1
             print(f"  [{done}] {row['post_id']}: {k} items")

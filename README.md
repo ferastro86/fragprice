@@ -15,7 +15,7 @@ stores everything in SQLite, and publishes:
 | Source | Discovery | Sold signal |
 |---|---|---|
 | Reddit | Arctic Shift archive (no auth) | Claude reads the **live** post + seller comments at 4 days old and again at 21 days: `~~strikethrough~~`, "SOLD", flair, "sold to u/…" |
-| Mercari | Own Playwright scraper (`fragprice/sources/mercari.py`), mercari.com search with the sold-only filter | Already sold — Claude only parses the title into brand / name / size |
+| Mercari | **Off for now** — own Playwright scraper kept in `fragprice/sources/mercari.py`, sold-only search | Already sold — Claude only parses the title into brand / name / size |
 | Facebook | **Planned** — `fragprice/sources/facebook.py` is a documented placeholder; disabled and hidden from the page | Claude reads post + comments at 4 and 10 days old |
 
 Re-checks skip Claude entirely when the post text hasn't changed, so you only pay for new or edited posts.
@@ -71,7 +71,15 @@ fragprice/sources/        reddit.py, mercari.py, facebook.py (stub)
 fragprice/db.py           SQLite schema
 ```
 
-## Mercari notes
+## Mercari notes (currently disabled)
+
+Mercari is switched off: in testing (April 2026) Mercari showed automated browsers — Playwright, stealth mode,
+even real Chrome driven by Playwright — an empty "No results found" page while the same search worked in normal
+Chrome. Everything downstream (database, page toggle, Excel columns) still supports it. To try again set
+`mercari.enabled: true`; the workflow then installs Chromium automatically. If results come back empty, the more
+promising routes are reading sold searches from your real Chrome (e.g. the Page Change Watcher extension) or a
+hosted scraper, plugged in by making `mercari(cfg)` return the same row format.
+
 
 Mercari renders results with JavaScript and uses rotating CSS class names, so the scraper reads result cards by
 their `/us/item/<id>` links and also captures the page's own JSON API responses for status and dates. It runs a real
