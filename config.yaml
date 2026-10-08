@@ -37,12 +37,12 @@ mercari:
     - montale
 
 facebook:
-  enabled: false              # scraper not chosen yet (see README)
+  enabled: false              # placeholder — implement fragprice/sources/facebook.py, then set true
   lookback: "12 days"          # each run rescrapes this window so SOLD edits/comments get picked up
   max_posts_per_group: 300
   check_ages_days: [4, 10]
   max_claude_calls: 400
-  groups: []                   # paste group URLs, e.g. - https://www.facebook.com/groups/123456789
+  groups: []                   # for later: paste group URLs, e.g. - https://www.facebook.com/groups/123456789
 
 valuation:
   default_off: []             # platforms unticked on the search page by default, e.g. [mercari]

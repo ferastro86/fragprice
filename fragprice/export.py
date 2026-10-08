@@ -124,7 +124,8 @@ def build(con, vcfg):
         "n_fragrances": len(out),
         "n_sales": sum(x["n_sold"] for x in out),
         "window_days": vcfg["window_days"],
-        "sources": SOURCES,
+        "sources": SOURCES,                          # index order used by compact sale rows
+        "active": vcfg.get("active") or SOURCES,       # platforms shown on the page
         "default_off": vcfg.get("default_off") or [],
         "n_by_source": {src: sum(x["n_by_source"][src] for x in out) for src in SOURCES},
         "fragrances": out,

@@ -81,7 +81,7 @@ const CC = {n: "new", u: "used", d: "decant"};
 const ALIAS = {pdm:"parfums de marly", mfk:"maison francis kurkdjian", br540:"baccarat rouge 540", br:"baccarat rouge",
   ysl:"yves saint laurent", tf:"tom ford", jpg:"jean paul gaultier", mm:"maison margiela", lv:"louis vuitton", bdc:"bleu de chanel"};
 const norm = s => (s || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
-let DATA = [], SOURCES = [], ON = {}, shown = 40;
+let DATA = [], SOURCES = [], ACTIVE = [], ON = {}, shown = 40;
 
 // ---------- stats (mirror export.py) ----------
 const median = a => { const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
@@ -128,7 +128,7 @@ function estimate(f, ml, fill) {
 function platformTable(f, h) {
   // medians per platform for the headline size/condition, always shown so you can compare (off = greyed)
   const s = h && f.sizes.find(x => x.size_ml === h.size && x.cond === h.cond);
-  const rows = SOURCES.map(src => {
+  const rows = ACTIVE.map(src => {
     const b = s && s.by_source[src], n = f.n_by_source[src] || 0;
     return `<tr class="${ON[src] ? "" : "off"}"><td>${LABEL[src]}</td><td class="r">${b ? `<b>${money(b.median)}</b>` : "—"}</td>
       <td class="r">${b ? b.n : 0}</td><td class="r">${n}</td></tr>`;
@@ -183,7 +183,7 @@ function updateEst(c) {
 
 function buildToggles(counts) {
   const box = $("#plats");
-  for (const src of SOURCES) {
+  for (const src of ACTIVE) {
     const b = document.createElement("button");
     b.className = "plat" + (ON[src] ? " on" : "");
     b.textContent = `${LABEL[src]} · ${(counts[src] || 0).toLocaleString()}`;
@@ -204,9 +204,10 @@ $("#more").addEventListener("click", () => { shown += 40; render(); });
 
 fetch("data.json", {cache: "no-cache"}).then(r => r.json()).then(d => {
   SOURCES = d.sources;
+  ACTIVE = d.active || d.sources;
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem("fragprice-platforms") || "{}"); } catch (e) {}
-  for (const s of SOURCES) ON[s] = s in saved ? saved[s] : !(d.default_off || []).includes(s);
+  for (const s of SOURCES) ON[s] = !ACTIVE.includes(s) ? false : s in saved ? saved[s] : !(d.default_off || []).includes(s);
   DATA = d.fragrances.map(f => ({...f, _s: norm(f.brand + " " + f.name + " " + f.key)}));
   $("#meta").textContent = `${d.n_fragrances.toLocaleString()} fragrances · ${d.n_sales.toLocaleString()} sales · updated ${d.updated}`;
   buildToggles(d.n_by_source);

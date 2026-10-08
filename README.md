@@ -16,7 +16,7 @@ stores everything in SQLite, and publishes:
 |---|---|---|
 | Reddit | Arctic Shift archive (no auth) | Claude reads the **live** post + seller comments at 4 days old and again at 21 days: `~~strikethrough~~`, "SOLD", flair, "sold to u/…" |
 | Mercari | Own Playwright scraper (`fragprice/sources/mercari.py`), mercari.com search with the sold-only filter | Already sold — Claude only parses the title into brand / name / size |
-| Facebook | **Not wired up yet** — `fragprice/sources/facebook.py` is a stub; disabled in config | Claude reads post + comments at 4 and 10 days old |
+| Facebook | **Planned** — `fragprice/sources/facebook.py` is a documented placeholder; disabled and hidden from the page | Claude reads post + comments at 4 and 10 days old |
 
 Re-checks skip Claude entirely when the post text hasn't changed, so you only pay for new or edited posts.
 Values use **sold** prices only, last 365 days, outliers removed (1.5× IQR), confidence ≥ 0.6.
@@ -80,3 +80,9 @@ their `/us/item/<id>` links and also captures the page's own JSON API responses 
 `python -m fragprice.run --sources mercari && git add data docs && git commit -m mercari && git push`.
 
 Mercari has no "date sold" on search cards, so a sale is dated the day it's first seen (accurate for daily runs).
+
+## Adding Facebook later
+
+The pipeline, Claude re-checks, database, page toggle and Excel columns already support Facebook. Implement
+`facebook(cfg)` in `fragprice/sources/facebook.py` (its docstring gives the exact return format), add group URLs
+under `facebook.groups`, and set `facebook.enabled: true`. The Facebook toggle appears on the page automatically.

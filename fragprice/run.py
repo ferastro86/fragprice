@@ -170,7 +170,8 @@ def main():
                     run_facebook(con, cfg["facebook"], canon)
             except Exception as e:  # keep other sources + export going
                 print(f"{s} crashed: {e}")
-    export.build(con, cfg["valuation"])
+    vcfg = dict(cfg["valuation"], active=[s for s in ("reddit", "facebook", "mercari") if cfg[s]["enabled"]])
+    export.build(con, vcfg)
     con.close()
 
 
