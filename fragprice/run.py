@@ -141,22 +141,34 @@ def read_reddit(con, cfg, canon, budget=None):
         if not _wait_for_batch(con, cfg, canon, pending, wait_deadline, excl):
             return
 
+    # Live reddit.com copies (current flair + edits). Works on a home PC; on GitHub's servers it returns {}.
+    probe = con.execute("SELECT post_id FROM posts WHERE source='reddit' ORDER BY created_utc DESC LIMIT 1").fetchone()
+    has_live = bool(probe and reddit.live_info([probe["post_id"]]))
+    if has_live and not db.get_meta(con, "live_recheck_done"):
+        # first run with live access: re-check every post read from the archive. Posts whose live copy is
+        # identical are skipped for free (same fingerprint); only ones with new SOLD flair/edits go to Claude.
+        n = con.execute("UPDATE posts SET checks=0 WHERE source='reddit' AND checks>0").rowcount
+        db.set_meta(con, "live_recheck_done", True)
+        print(f"reddit: live access available — re-checking {n} archive-read posts for flair/edits")
+    print(f"reddit: live reddit.com data {'ON' if has_live else 'OFF (archive only — run on the home PC for SOLD flair/edits)'}")
+
     due = db.due_posts(con, "reddit", cfg["check_ages_days"], limit=budget or cfg["max_claude_calls"])
     print(f"reddit: {len(due)} posts due ({'batch, half price' if use_batch else 'direct'})")
     last_age = max(cfg["check_ages_days"])
+    info = reddit.live_info([r["post_id"] for r in due]) if has_live and due else {}
 
     def fetch(row):
         """Worker thread: get the post's current text + comments and decide what to do with it."""
         if time.time() > fetch_deadline:
             return row, "late", None, None
-        cur = reddit.live(row["post_id"]) or {"title": row["title"], "text": row["text"], "flair": None,
-                                             "author": None, "comments": []}
+        cur = reddit.live(row["post_id"], info.get(row["post_id"])) or {
+            "title": row["title"], "text": row["text"], "flair": None, "author": None, "comments": []}
         if cur["text"] in ("[deleted]", "[removed]", None, ""):
             cur["text"] = row["text"]  # keep archived copy if seller deleted after selling
         blob = f"{cur['title']}\n{cur['text']}\n{cur.get('flair')}\n" + "\n".join(cur["comments"])
         h = db.text_hash(blob)
-        if row["checks"] > 0 and h == row["text_hash"]:
-            return row, "same", h, None  # unchanged since last read
+        if row["text_hash"] and h == row["text_hash"]:
+            return row, "same", h, None  # nothing changed since Claude last read it: no need to pay again
         old = row["created_utc"] <= time.time() - last_age * 86400
         if old and cfg.get("skip_old_without_sale_hint", True) and not reddit.has_sale_hint(
                 cur["title"], cur["text"], cur.get("flair"), *cur["comments"]):

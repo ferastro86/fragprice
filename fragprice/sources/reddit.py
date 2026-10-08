@@ -99,46 +99,47 @@ def is_candidate(post, skip_decant_posts=True):
     return skip_reason(post, skip_decant_posts) is None
 
 
-def _flatten(children, out, depth=0):
-    for c in children or []:
-        d = c.get("data", {})
-        if c.get("kind") == "t1" and d.get("body"):
-            out.append(f"{d.get('author')}: {d['body']}")
-            rep = d.get("replies")
-            if isinstance(rep, dict) and depth < 3:
-                _flatten(rep.get("data", {}).get("children"), out, depth + 1)
+def live_info(post_ids, pause=7.0):
+    """CURRENT title, text, flair and author for many posts straight from reddit.com — 100 posts per request,
+    so a few thousand posts take a few minutes even under Reddit's ~10 requests/minute limit for apps without
+    an API key. This is what sees SOLD flair and later strikethrough/SOLD edits; the archive copy is a snapshot
+    taken seconds after posting. Only works from a home connection (Reddit blocks cloud servers like GitHub's).
+    Returns {} when reddit.com refuses us, so callers fall back to the archive."""
+    ids, out = list(post_ids), {}
+    for i in range(0, len(ids), 100):
+        chunk = ids[i:i + 100]
+        data = _get("https://www.reddit.com/api/info.json",
+                    {"id": ",".join(f"t3_{x}" for x in chunk), "raw_json": 1}, tries=3)
+        if data is None:
+            if not out:
+                print("  reddit.com not answering — using the archive copy (flair/edits may be out of date)")
+                return {}
+            print(f"  reddit.com stopped answering after {len(out)} posts; the rest use the archive copy")
+            return out
+        for ch in (data.get("data") or {}).get("children") or []:
+            d = ch.get("data") or {}
+            out[d.get("id")] = {"title": d.get("title"), "text": d.get("selftext"),
+                                "flair": d.get("link_flair_text"), "author": d.get("author")}
+        if (i // 100) % 10 == 9:
+            print(f"  live from reddit.com: {len(out)}/{len(ids)} posts")
+        if i + 100 < len(ids):
+            time.sleep(pause)
+    return out
 
 
-_reddit_blocked = False
-
-
-def live(post_id):
-    """Current post text, flair, author and comments. Tries reddit.com, falls back to Arctic Shift.
-    If reddit.com refuses us once, stop trying it for the rest of the run (no slow retries per post)."""
-    global _reddit_blocked
-    data = None if _reddit_blocked else _get(f"https://www.reddit.com/comments/{post_id}.json",
-                                             {"raw_json": 1, "limit": 100}, tries=2)
-    if data is None and not _reddit_blocked:
-        _reddit_blocked = True
-        print("  reddit.com not answering from this runner — using the Arctic Shift archive for the rest of the run")
-    if isinstance(data, list) and data:
-        p = data[0]["data"]["children"][0]["data"]
-        comments = []
-        _flatten(data[1]["data"]["children"] if len(data) > 1 else [], comments)
-        return {
-            "title": p.get("title"), "text": p.get("selftext"), "flair": p.get("link_flair_text"),
-            "author": p.get("author"), "comments": comments,
-        }
-    p = _get(f"{ARCTIC}/posts/ids", {"ids": post_id})
-    p = ((p or {}).get("data") or [None])[0]
+def live(post_id, info=None):
+    """Post text, flair, author + comments. `info` is the live reddit.com copy (from live_info) when we have it;
+    comments always come from the archive, which stores each comment as it's posted."""
     c = _get(f"{ARCTIC}/comments/search", {"link_id": f"t3_{post_id}", "limit": 100})
     comments = [f"{x.get('author')}: {x.get('body')}" for x in (c or {}).get("data") or []]
+    if info:
+        return dict(info, comments=comments, live=True)
+    p = _get(f"{ARCTIC}/posts/ids", {"ids": post_id})
+    p = ((p or {}).get("data") or [None])[0]
     if not p:
         return None
-    return {
-        "title": p.get("title"), "text": p.get("selftext"), "flair": p.get("link_flair_text"),
-        "author": p.get("author"), "comments": comments,
-    }
+    return {"title": p.get("title"), "text": p.get("selftext"), "flair": p.get("link_flair_text"),
+            "author": p.get("author"), "comments": comments, "live": False}
 
 
 def has_sale_hint(*texts):

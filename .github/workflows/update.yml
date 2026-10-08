@@ -23,22 +23,32 @@ concurrency:
 
 jobs:
   update:
-    runs-on: ubuntu-latest
-    timeout-minutes: 300   # fetch (≤120) + batch wait (≤90) + overhead
+    # Where it runs: set the repo variable RUNNER to "self-hosted" to use your home PC (sees live reddit.com:
+    # SOLD flair and edits). Unset = GitHub's servers (archive copy only).
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 300   # fetch (≤150) + batch wait (≤90) + overhead
+    defaults:
+      run:
+        shell: bash        # on Windows this is Git Bash (installed with Git for Windows)
+    env:
+      PYTHONUTF8: "1"      # Windows: read/write files as UTF-8
+      PYTHONUNBUFFERED: "1"
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
+        if: runner.environment == 'github-hosted'   # the home PC uses its own installed Python
         with:
           python-version: "3.12"
           cache: pip
 
-      - run: pip install -r requirements.txt
+      - run: python -m pip install -r requirements.txt
 
       - name: Install Chromium (only when Mercari is enabled)
         run: |
           if python -c "import yaml,sys; sys.exit(0 if yaml.safe_load(open('config.yaml'))['mercari']['enabled'] else 1)"; then
-            python -m playwright install --with-deps chromium && sudo apt-get install -y xvfb
+            if [ "$RUNNER_OS" = "Linux" ]; then python -m playwright install --with-deps chromium && sudo apt-get install -y xvfb
+            else python -m playwright install chromium; fi
           fi
 
       - name: Scrape, extract with Claude, export

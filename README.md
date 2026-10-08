@@ -97,3 +97,21 @@ Mercari has no "date sold" on search cards, so a sale is dated the day it's firs
 The pipeline, Claude re-checks, database, page toggle and Excel columns already support Facebook. Implement
 `facebook(cfg)` in `fragprice/sources/facebook.py` (its docstring gives the exact return format), add group URLs
 under `facebook.groups`, and set `facebook.enabled: true`. The Facebook toggle appears on the page automatically.
+
+## Running on your home PC (live reddit.com data)
+
+Reddit blocks GitHub's servers, so a GitHub run only sees the archive copy of each post, taken seconds after it
+was posted: later SOLD flair, strikethroughs and "SOLD" edits are invisible. Running on a PC at home fixes that.
+One reddit.com request returns the current flair + text of 100 posts, so this stays well under Reddit's limit.
+
+One-time setup on the PC (Windows):
+1. Install **Git for Windows** (git-scm.com) and **Python 3.12** (python.org — tick "Add python.exe to PATH").
+2. In the repo: **Settings → Actions → Runners → New self-hosted runner → Windows x64**. Open PowerShell, run the
+   commands GitHub shows (in e.g. `C:\actions-runner`). When `config.cmd` asks, accept the defaults and answer
+   **Y** to "run as service", so it runs even when you're not logged in.
+3. In the repo: **Settings → Secrets and variables → Actions → Variables → New variable**: `RUNNER` = `self-hosted`.
+4. Power settings: don't let the PC sleep (at least around the daily run, ~5:47 AM Central).
+
+Delete the `RUNNER` variable to move runs back to GitHub's servers. If the PC is off, a run waits up to 24 hours
+for it. The first run on the PC re-checks every post already read from the archive; posts whose live copy is
+unchanged are skipped for free, and only ones with new SOLD flair/edits are sent to Claude.
