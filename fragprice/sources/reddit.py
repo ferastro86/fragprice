@@ -7,23 +7,12 @@ import requests
 
 ARCTIC = "https://arctic-shift.photon-reddit.com/api"
 UA = {"User-Agent": "fragprice/1.0 (fragrance price research)"}
-WTB_WTT = re.compile(r"\b(wtb|wtt|iso|want to (buy|trade)|looking for)\b", re.I)
-MONEY = re.compile(r"paypal|\bpp\b|\$|cash|venmo|zelle|cash ?app|\busd\b|\bg&s\b|\bf&f\b", re.I)
-DECANT = re.compile(r"\b(decants?|splits?|samples?|vials?|atomi[sz]ers?)\b", re.I)
-BOTTLE = re.compile(r"\b(bottles?|full|partials?|tester|sealed|nib|bnib)\b", re.I)
+# r/fragranceswap titles: "[WTS] Guerlain Vetiver 147/150ml (Bottle)" with flair WTS / WTB / WTT.
+TAG = re.compile(r"\[\s*(wts|wtb|wtt|fs|ft|iso)\s*\]", re.I)
+TYPE = re.compile(r"\(([^)]*\b(?:bottles?|decants?|samples?|splits?)\b[^)]*)\)", re.I)
+DECANT = re.compile(r"\b(decants?|splits?|samples?|vials?)\b", re.I)
+BOTTLE = re.compile(r"\b(bottles?|partials?|tester)\b", re.I)
 SIZE = re.compile(r"(\d+(?:\.\d+)?)\s?(ml|oz)\b", re.I)
-
-
-def _mentions_bottle(title):
-    """Bottle words, or any size >= 30 ml (1 oz). '10ml' / '5ml' are decant sizes."""
-    if BOTTLE.search(title):
-        return True
-    for num, unit in SIZE.findall(title):
-        ml = float(num) * (30 if unit.lower() == "oz" else 1)
-        if ml >= 30:
-            return True
-    return False
-SECTION = re.compile(r"\[\s*(h|w)\s*\]\s*(.*?)(?=\[\s*[hw]\s*\]|$)", re.I)
 
 
 def _get(url, params=None, tries=4):
@@ -61,29 +50,40 @@ def discover(subreddit, after_ts, before_ts=None):
     return out
 
 
-def skip_reason(post, skip_decant_posts=True):
-    """Cheap title pre-filter so Claude never reads posts we don't want. Returns a reason, or None to keep.
+def _mentions_bottle(text):
+    """Bottle words, or any size >= 30 ml (1 oz) — '10ml' / '5ml' are decant sizes."""
+    if BOTTLE.search(text):
+        return True
+    return any(float(n) * (30 if u.lower() == "oz" else 1) >= 30 for n, u in SIZE.findall(text))
 
-    r/fragranceswap titles look like "[US-TX] [H] Layton, Aventus [W] PayPal".
-      - WTB: money is what they HAVE, or the title says WTB/ISO/looking for
-      - WTT: what they WANT has no money in it (trade-only), or the title says WTT
-      - decant posts: title is about decants/splits/samples and mentions no bottles
+
+def skip_reason(post, skip_decant_posts=True):
+    """Cheap pre-filter so Claude never reads posts we don't want. Returns a reason, or None to keep.
+
+    - Keep anything tagged WTS (title tag or flair), including combined "[WTS][WTT]" posts.
+    - Skip WTB / WTT / ISO posts that aren't also selling.
+    - Skip decant-only posts: the "(Decant)" type tag (or title) with no bottle in it.
+      Posts selling both, e.g. "(Bottle & Decant)", go to Claude, which keeps only the bottles.
     """
     title = post.get("title") or ""
+    flair = (post.get("link_flair_text") or "").lower()
     if post.get("is_video"):
         return "video"
-    if WTB_WTT.search(title):
-        return "wtb/wtt"
-    sec = {}
-    for k, v in SECTION.findall(title):
-        sec.setdefault(k.lower(), v)
-    have, want = sec.get("h"), sec.get("w")
-    if have is not None and MONEY.search(have) and not (want and MONEY.search(want)):
+    tags = {t.lower() for t in TAG.findall(title)}
+    tags |= {t for t in ("wts", "wtb", "wtt") if t in flair}
+    selling = bool(tags & {"wts", "fs"}) or "sell" in flair
+    if not selling and tags & {"wtb", "iso"}:
         return "wtb"
-    if want is not None and not MONEY.search(want):
+    if not selling and tags & {"wtt", "ft"}:
         return "wtt"
-    if skip_decant_posts and DECANT.search(title) and not _mentions_bottle(title):
-        return "decants"
+    if not selling and re.search(r"\b(wtb|wtt|iso|looking for)\b", title, re.I):
+        return "wtb/wtt"
+    if not tags and not flair:
+        return "untagged"  # mod / bot posts (e.g. PerfumeBot announcements)
+    if skip_decant_posts:
+        kind = " ".join(TYPE.findall(title)) or title  # prefer the (Bottle)/(Decant) tag when present
+        if DECANT.search(kind) and not _mentions_bottle(kind):
+            return "decants"
     return None
 
 

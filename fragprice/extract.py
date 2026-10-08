@@ -51,7 +51,8 @@ SOLD STATUS (be strict — this drives valuations)
 - sold_evidence: short quote/phrase that justified the status.
 - confidence: 0-1, your confidence in the item identity + price + status together.
 
-Ignore WTB / want-to-buy and WTT / want-to-trade posts, trade-only items with no price, and non-fragrance items.
+On r/fragranceswap titles start with [WTS]/[WTB]/[WTT] and end with (Bottle)/(Decant).
+Ignore WTB / want-to-buy and WTT / want-to-trade-only posts, trade-only items with no price, and non-fragrance items.
 Still record decants/samples with condition decant/sample (they are filtered downstream), never as bottles.
 If nothing qualifies, return an empty items list."""
 
