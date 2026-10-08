@@ -147,7 +147,7 @@ function card(f, i) {
   const line = r => `<tr><td style="white-space:nowrap">${shortDate(r.date)}</td>
     <td>${r.size_ml ? r.size_ml + "ml" : "?"}${r.fill != null ? " · " + Math.round(r.fill) + "%" : ""}<br><small>${esc((r.cond || "").replace("_", " "))}</small></td>
     <td>${r.pres ? esc(r.pres) : "<small>not stated</small>"}</td>
-    <td class="r"><b>${money(r.price)}</b><br><small>${safeUrl(r.url) ? `<a class="s" href="${safeUrl(r.url)}" target="_blank" rel="noopener">${LABEL[r.source]} ↗</a>` : LABEL[r.source]}</small></td></tr>`;
+    <td class="r"><b>${money(r.price)}</b>${r.qty > 1 ? ` <small>×${r.qty}</small>` : ""}<br><small>${safeUrl(r.url) ? `<a class="s" href="${safeUrl(r.url)}" target="_blank" rel="noopener">${LABEL[r.source]} ↗</a>` : LABEL[r.source]}</small></td></tr>`;
   const head = `<tr><th>Date</th><th>Size · fill</th><th>Presentation</th><th class="r">Price</th></tr>`;
   const soldRows = f.recent.filter(r => ON[r.source]);
   const askRows = (f.asks || []).filter(r => ON[r.source]);
@@ -165,7 +165,7 @@ function card(f, i) {
         ${c.last ? `<span class="chip">last ${c.last}</span>` : ""}</div>
       <div class="est">Value my bottle: <input type="number" inputmode="decimal" class="ml" value="${defSize}"> ml at
         <input type="number" inputmode="decimal" class="fill" value="100">% <output>—</output></div>
-      ${recent ? `<h3>Every sale · ${soldRows.length}</h3><table>${head}${recent}</table>` : `<h3>Every sale</h3><p class="empty" style="padding:8px 0">No confirmed sales yet.</p>`}
+      ${recent ? `<h3>Every sale · ${soldRows.reduce((a, r) => a + (r.qty || 1), 0)} bottles</h3><table>${head}${recent}</table>` : `<h3>Every sale</h3><p class="empty" style="padding:8px 0">No confirmed sales yet.</p>`}
       ${asking ? `<h3>Listed now, not sold · ${askRows.length}</h3><table>${head}${asking}</table>` : ""}
       ${sizes ? `<h3>Summary by size</h3><table><tr><th>Size</th><th>Cond.</th><th class="r">Median</th><th class="r">Range</th><th class="r">#</th></tr>${sizes}</table>` : ""}
       ${platformTable(f, h)}

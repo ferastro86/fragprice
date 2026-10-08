@@ -22,6 +22,13 @@ def load_config():
     return yaml.safe_load((ROOT / "config.yaml").read_text())
 
 
+def _int(v):
+    try:
+        return max(0, int(v))
+    except (TypeError, ValueError):
+        return 0
+
+
 def store_items(con, canon, source, post, items, default_status=None, exclude_conditions=()):
     keep = []
     for it in items:
@@ -34,6 +41,14 @@ def store_items(con, canon, source, post, items, default_status=None, exclude_co
         if not key:
             continue
         it["key"] = key  # raw brand/name kept as written; export shows the majority spelling per key
+        sold_n = _int(it.get("qty_sold"))
+        left_n = _int(it.get("qty_available"))
+        if it.get("status") == "sold" and sold_n and left_n:
+            # partly sold line, e.g. "6 → 1 available, 5 sold": one sold row (x5) + one still-listed row (x1)
+            keep.append(dict(it, qty=sold_n))
+            keep.append(dict(it, status="available", qty=left_n, sold_evidence=None))
+            continue
+        it["qty"] = (sold_n if it.get("status") == "sold" else left_n) or 1
         keep.append(it)
     db.replace_sales(con, source, post["post_id"], post["url"], post["created_utc"], keep)
     return len(keep)

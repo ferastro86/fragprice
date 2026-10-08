@@ -54,7 +54,7 @@ def present(r):
 def _listing(r):
     return {"date": _date(r["date_utc"]), "price": r["price"], "size_ml": r["size_ml"], "fill": r["fill_pct"],
             "cond": r["condition"], "pres": present(r), "source": r["source"], "url": r["url"],
-            "conc": r["concentration"]}
+            "conc": r["concentration"], "qty": r.get("qty") or 1}
 
 
 def build(con, vcfg):
@@ -73,6 +73,7 @@ def build(con, vcfg):
         disp.setdefault(r["key"], (r["brand"], r["name"]))
     for r in rows:
         r["brand"], r["name"] = disp.get(r["key"], (r["brand"], r["name"]))
+        r["qty"] = int(r.get("qty") or 1)
 
     frags = {}
     for r in rows:
@@ -82,7 +83,8 @@ def build(con, vcfg):
 
     out = []
     for f in frags.values():
-        sold = [r for r in f["sold"] if not r["bundle"] and r["date_utc"] >= window]
+        sold_rows = [r for r in f["sold"] if not r["bundle"] and r["date_utc"] >= window]
+        sold = [r for r in sold_rows for _ in range(r["qty"])]  # one entry per bottle for the math
         if not sold and not f["asks"]:
             continue
         groups = {}
@@ -129,7 +131,7 @@ def build(con, vcfg):
             "ask_median": _stats([r["price"] for r in asks])["median"] if asks and _stats([r["price"] for r in asks]) else None,
             "n_asks": len(asks),
             # every individual listing, newest first: all sales in the window + current bottle asks
-            "recent": [_listing(r) for r in sorted(sold, key=lambda r: -r["date_utc"])],
+            "recent": [_listing(r) for r in sorted(sold_rows, key=lambda r: -r["date_utc"])],
             "asks": [_listing(r) for r in sorted(asks, key=lambda r: -r["date_utc"])[:30]],
         })
     out.sort(key=lambda x: (-x["n_sold"], x["brand"] or "", x["name"] or ""))
@@ -189,11 +191,11 @@ def _excel(out, rows, summary):
 
     ws = wb.create_sheet("Sales")
     sheet(ws, ["Date", "Source", "Brand", "Fragrance", "Conc.", "Size (ml)", "Fill %", "Condition", "Box", "Cap",
-               "Presentation", "Price", "Status", "Bundle", "Confidence", "Evidence", "Link"],
+               "Presentation", "Qty", "Price", "Status", "Bundle", "Confidence", "Evidence", "Link"],
           [[_date(r["date_utc"]), r["source"], r["brand"], r["name"], r["concentration"], r["size_ml"],
-            r["fill_pct"], r["condition"], r.get("box"), r.get("cap"), present(r), r["price"], r["status"],
+            r["fill_pct"], r["condition"], r.get("box"), r.get("cap"), present(r), r.get("qty") or 1, r["price"], r["status"],
             bool(r["bundle"]), r["confidence"], r["evidence"], r["url"]] for r in rows],
-          [11, 9, 20, 28, 8, 9, 7, 12, 8, 8, 20, 10, 10, 8, 10, 30, 40], money_cols=(12,))
+          [11, 9, 20, 28, 8, 9, 7, 12, 8, 8, 20, 6, 10, 10, 8, 10, 30, 40], money_cols=(13,))
 
     ws = wb.create_sheet("About")
     for line in [

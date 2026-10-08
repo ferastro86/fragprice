@@ -8,7 +8,7 @@ import anthropic
 
 MODEL = os.environ.get("FRAGPRICE_MODEL", "claude-haiku-5-5")
 # Bump when the SYSTEM rules change: posts read under an older version get re-read on the next run.
-PROMPT_VERSION = 4
+PROMPT_VERSION = 5
 _client = None
 
 
@@ -44,6 +44,13 @@ PRESENTATION (what comes with the bottle)
 - cap: "yes" / "no" (e.g. "no cap", "missing cap", "capless") / "unknown". Assume nothing — only what's stated.
 - presentation: a few words exactly as the seller describes it, e.g. "full presentation", "box, no cap",
   "tester box", "damaged box", "bottle + cap only". Null if nothing is said.
+
+QUANTITY (sellers often list several identical bottles on one line)
+- qty_sold: how many of THIS line sold. "(x3) SOLD" -> 3; "(x3 2) $345 SOLD" (3 struck, 2 written) -> read the
+  final number, 2, unless the text says otherwise; "(6 1 available) ... 5 Sold!!" -> 5. Single bottle sold -> 1.
+  Not sold -> 0.
+- qty_available: how many are still for sale ("1 available" -> 1; unsold single bottle -> 1; all sold -> 0).
+- A line that is partly sold (some sold, some left) is still ONE entry: status "sold", with both numbers filled in.
 
 PRICE
 - price: the asking/sold price for THAT item, as a number. If several sizes/decant tiers are listed, make one entry per tier.
@@ -99,6 +106,8 @@ TOOL = {
                         "currency": {"type": "string"},
                         "price_includes_shipping": {"type": ["boolean", "null"]},
                         "bundle": {"type": "boolean"},
+                        "qty_sold": {"type": ["integer", "null"]},
+                        "qty_available": {"type": ["integer", "null"]},
                         "status": {"type": "string", "enum": ["sold", "available", "pending", "unknown"]},
                         "sold_evidence": {"type": ["string", "null"]},
                         "confidence": {"type": "number"},
