@@ -10,7 +10,19 @@ UA = {"User-Agent": "fragprice/1.0 (fragrance price research)"}
 WTB_WTT = re.compile(r"\b(wtb|wtt|iso|want to (buy|trade)|looking for)\b", re.I)
 MONEY = re.compile(r"paypal|\bpp\b|\$|cash|venmo|zelle|cash ?app|\busd\b|\bg&s\b|\bf&f\b", re.I)
 DECANT = re.compile(r"\b(decants?|splits?|samples?|vials?|atomi[sz]ers?)\b", re.I)
-BOTTLE = re.compile(r"\b(bottles?|full|partials?|\d{2,3}\s?ml|\d(\.\d)?\s?oz|tester|sealed|nib|bnib)\b", re.I)
+BOTTLE = re.compile(r"\b(bottles?|full|partials?|tester|sealed|nib|bnib)\b", re.I)
+SIZE = re.compile(r"(\d+(?:\.\d+)?)\s?(ml|oz)\b", re.I)
+
+
+def _mentions_bottle(title):
+    """Bottle words, or any size >= 30 ml (1 oz). '10ml' / '5ml' are decant sizes."""
+    if BOTTLE.search(title):
+        return True
+    for num, unit in SIZE.findall(title):
+        ml = float(num) * (30 if unit.lower() == "oz" else 1)
+        if ml >= 30:
+            return True
+    return False
 SECTION = re.compile(r"\[\s*(h|w)\s*\]\s*(.*?)(?=\[\s*[hw]\s*\]|$)", re.I)
 
 
@@ -70,7 +82,7 @@ def skip_reason(post, skip_decant_posts=True):
         return "wtb"
     if want is not None and not MONEY.search(want):
         return "wtt"
-    if skip_decant_posts and DECANT.search(title) and not BOTTLE.search(title):
+    if skip_decant_posts and DECANT.search(title) and not _mentions_bottle(title):
         return "decants"
     return None
 
