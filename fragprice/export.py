@@ -40,6 +40,23 @@ def _date(ts):
     return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%d") if ts else None
 
 
+def present(r):
+    """Human summary of what comes with the bottle."""
+    if r.get("presentation"):
+        return r["presentation"]
+    box, cap = r.get("box"), r.get("cap")
+    if box == "yes" and cap == "yes":
+        return "box + cap"
+    bits = [{"yes": "box", "no": "no box"}.get(box), {"yes": "cap", "no": "no cap"}.get(cap)]
+    return ", ".join(b for b in bits if b) or None
+
+
+def _listing(r):
+    return {"date": _date(r["date_utc"]), "price": r["price"], "size_ml": r["size_ml"], "fill": r["fill_pct"],
+            "cond": r["condition"], "pres": present(r), "source": r["source"], "url": r["url"],
+            "conc": r["concentration"]}
+
+
 def build(con, vcfg):
     now = time.time()
     window = now - vcfg["window_days"] * 86400
@@ -111,10 +128,9 @@ def build(con, vcfg):
             "sizes": sizes,
             "ask_median": _stats([r["price"] for r in asks])["median"] if asks and _stats([r["price"] for r in asks]) else None,
             "n_asks": len(asks),
-            "recent": [{
-                "date": _date(r["date_utc"]), "price": r["price"], "size_ml": r["size_ml"], "fill": r["fill_pct"],
-                "cond": r["condition"], "source": r["source"], "url": r["url"], "conc": r["concentration"],
-            } for r in sold[:40]],
+            # every individual listing, newest first: all sales in the window + current bottle asks
+            "recent": [_listing(r) for r in sorted(sold, key=lambda r: -r["date_utc"])],
+            "asks": [_listing(r) for r in sorted(asks, key=lambda r: -r["date_utc"])[:30]],
         })
     out.sort(key=lambda x: (-x["n_sold"], x["brand"] or "", x["name"] or ""))
 
@@ -172,12 +188,12 @@ def _excel(out, rows, summary):
           money_cols=(6, 7, 8, 9, 11, 13, 15, 17))
 
     ws = wb.create_sheet("Sales")
-    sheet(ws, ["Date", "Source", "Brand", "Fragrance", "Conc.", "Size (ml)", "Fill %", "Condition", "Price",
-               "Status", "Bundle", "Confidence", "Evidence", "Link"],
+    sheet(ws, ["Date", "Source", "Brand", "Fragrance", "Conc.", "Size (ml)", "Fill %", "Condition", "Box", "Cap",
+               "Presentation", "Price", "Status", "Bundle", "Confidence", "Evidence", "Link"],
           [[_date(r["date_utc"]), r["source"], r["brand"], r["name"], r["concentration"], r["size_ml"],
-            r["fill_pct"], r["condition"], r["price"], r["status"], bool(r["bundle"]), r["confidence"],
-            r["evidence"], r["url"]] for r in rows],
-          [11, 9, 20, 28, 8, 9, 7, 12, 10, 10, 8, 10, 30, 40], money_cols=(9,))
+            r["fill_pct"], r["condition"], r.get("box"), r.get("cap"), present(r), r["price"], r["status"],
+            bool(r["bundle"]), r["confidence"], r["evidence"], r["url"]] for r in rows],
+          [11, 9, 20, 28, 8, 9, 7, 12, 8, 8, 20, 10, 10, 8, 10, 30, 40], money_cols=(12,))
 
     ws = wb.create_sheet("About")
     for line in [

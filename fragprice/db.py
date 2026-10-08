@@ -35,6 +35,9 @@ CREATE TABLE IF NOT EXISTS sales (
     size_ml      REAL,
     fill_pct     REAL,
     condition    TEXT,
+    box          TEXT,                   -- yes | no | unknown
+    cap          TEXT,                   -- yes | no | unknown
+    presentation TEXT,                   -- seller's own words, e.g. "full presentation", "no cap"
     price        REAL,
     currency     TEXT,
     ships_incl   INTEGER,
@@ -55,6 +58,10 @@ def connect(path=DB_PATH):
     con = sqlite3.connect(path)
     con.row_factory = sqlite3.Row
     con.executescript(SCHEMA)
+    have = {r["name"] for r in con.execute("PRAGMA table_info(sales)")}
+    for col in ("box", "cap", "presentation"):  # upgrade databases created before these columns existed
+        if col not in have:
+            con.execute(f"ALTER TABLE sales ADD COLUMN {col} TEXT")
     return con
 
 
@@ -109,12 +116,13 @@ def replace_sales(con, source, post_id, url, date_utc, items):
     for it in items:
         con.execute(
             """INSERT INTO sales(source, post_id, url, date_utc, brand, name, key, concentration,
-               size_ml, fill_pct, condition, price, currency, ships_incl, status, bundle,
-               confidence, evidence) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               size_ml, fill_pct, condition, box, cap, presentation, price, currency, ships_incl, status, bundle,
+               confidence, evidence) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 source, str(post_id), url, int(date_utc or 0),
                 it.get("brand"), it.get("name"), it.get("key"), it.get("concentration"),
                 it.get("size_ml"), it.get("fill_pct"), it.get("condition"),
+                it.get("box"), it.get("cap"), it.get("presentation"),
                 it.get("price"), it.get("currency") or "USD",
                 None if it.get("price_includes_shipping") is None else int(bool(it["price_includes_shipping"])),
                 it.get("status"), int(bool(it.get("bundle"))),

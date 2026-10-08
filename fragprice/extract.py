@@ -8,7 +8,7 @@ import anthropic
 
 MODEL = os.environ.get("FRAGPRICE_MODEL", "claude-haiku-5-5")
 # Bump when the SYSTEM rules change: posts read under an older version get re-read on the next run.
-PROMPT_VERSION = 3
+PROMPT_VERSION = 4
 _client = None
 
 
@@ -37,6 +37,13 @@ SIZE / CONDITION
 - fill_pct: how full (100 for new/full). "90%", "95/100ml" -> 95, "used 5 sprays" -> ~98. Unknown -> null.
 - condition: new_sealed | new_unsealed | used | partial | decant | tester | sample | unknown.
   Decants/samples are small vials split from a bottle (usually 2-30 ml).
+
+PRESENTATION (what comes with the bottle)
+- box: "yes" if the original box is included ("with box", "full presentation", "BNIB"), "no" if stated without
+  ("no box", "bottle only", "unboxed"), else "unknown". A tester box counts as "yes" but say so in presentation.
+- cap: "yes" / "no" (e.g. "no cap", "missing cap", "capless") / "unknown". Assume nothing — only what's stated.
+- presentation: a few words exactly as the seller describes it, e.g. "full presentation", "box, no cap",
+  "tester box", "damaged box", "bottle + cap only". Null if nothing is said.
 
 PRICE
 - price: the asking/sold price for THAT item, as a number. If several sizes/decant tiers are listed, make one entry per tier.
@@ -85,6 +92,9 @@ TOOL = {
                         "size_ml": {"type": ["number", "null"]},
                         "fill_pct": {"type": ["number", "null"]},
                         "condition": {"type": "string", "enum": ["new_sealed", "new_unsealed", "used", "partial", "decant", "tester", "sample", "unknown"]},
+                        "box": {"type": "string", "enum": ["yes", "no", "unknown"]},
+                        "cap": {"type": "string", "enum": ["yes", "no", "unknown"]},
+                        "presentation": {"type": ["string", "null"]},
                         "price": {"type": ["number", "null"]},
                         "currency": {"type": "string"},
                         "price_includes_shipping": {"type": ["boolean", "null"]},
